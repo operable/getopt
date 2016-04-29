@@ -78,26 +78,29 @@ parse_and_check(OptSpecList, CmdLine) when is_list(OptSpecList), is_list(CmdLine
 
 %% @doc Check the parsed command line arguments returning ok if all required
 %%      options (i.e. that don't have defaults) are present, and returning
-%%      error otherwise.
+%%      an error with a list of missing fields otherwise.
 -spec check([option_spec()], [option()]) ->
                 ok | {error, {Reason :: atom(), Option :: atom()}}.
 check(OptSpecList, ParsedOpts) when is_list(OptSpecList), is_list(ParsedOpts) ->
-    try
-        RequiredOpts = [Name || {Name, _, _, Arg, _} <- OptSpecList,
-                                not is_tuple(Arg) andalso Arg =/= undefined],
-        lists:foreach(fun (Option) ->
+      RequiredOpts = [Name || {Name, _, _, Arg, _} <- OptSpecList,
+                              not is_tuple(Arg) andalso Arg =/= undefined],
+      lists:foldl(
+        fun
+          (Option, {error, {_, Errors}}=Acc) ->
             case proplists:is_defined(Option, ParsedOpts) of
-                true ->
-                    ok;
-                false ->
-                    throw({error, {missing_required_option, Option}})
+              true ->
+                Acc;
+              false ->
+                {error, {missing_required_options, lists:append([Option], Errors)}}
+            end;
+          (Option, ok) ->
+            case proplists:is_defined(Option, ParsedOpts) of
+              true ->
+                ok;
+              false ->
+                {error, {missing_required_options, [Option]}}
             end
-        end, RequiredOpts)
-    catch
-        _:Error ->
-            Error
-    end.
-
+        end, ok, RequiredOpts).
 
 %% @doc Parse the command line options and arguments returning a list of tuples
 %%      and/or atoms using the Erlang convention for sending options to a
